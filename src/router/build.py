@@ -2,7 +2,7 @@ import os
 import io
 import json
 import tarfile
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 from aiohttp import ClientSession
 from fastapi import APIRouter
 from jinja2 import Template
@@ -63,7 +63,7 @@ async def git_clone(owner: str, repo: str):
             return build_file_tree(f"/containers/{sha}")["children"][0]["children"]
 
 
-async def docker_build(owner: str, repo: str):
+async def docker_build_from_github_tarball(owner: str, repo: str):
     """
     Builds a Docker image from the latest code for the given GitHub repository.
     :param owner: The owner of the repository.
@@ -87,7 +87,23 @@ async def docker_build(owner: str, repo: str):
                 id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
                 return id_
 
-
+async def build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
+    """
+    Builds a Docker image from the given file tree.
+    :param tree: The file tree.
+    :return: The output of the Docker build.
+    """
+    if isinstance(tree, list):
+        for item in tree:
+            await build_from_tree(item)
+    else:
+        if tree["type"] == "file":
+            with open(tree["path"], "w") as f:
+                f.write(tree["content"])
+        else:
+            os.makedirs(tree["path"], exist_ok=True)
+            await build_from_tree(tree["children"])
+    
 
 @app.post("/build/{owner}/{repo}")
 async def build(owner: str, repo: str):
@@ -97,7 +113,7 @@ async def build(owner: str, repo: str):
     :param repo: The name of the repository.
     :return: The output of the Docker build.
     """
-    return await docker_build(owner, repo)
+    return await docker_build_from_github_tarball(owner, repo)
 
 
 @app.get("/clone/{owner}/{repo}")
@@ -109,7 +125,7 @@ async def deploy_container_from_repo(
     owner:str, repo:str, port: int = 8080, env_vars: str = "DOCKER=1"
 ):
     name = f"{owner}-{repo}"
-    image = await docker_build(owner, repo)
+    image = await docker_build_from_github_tarball(owner, repo)
     host_port = str(gen_port())
     payload = {
         "Image": image,
@@ -123,6 +139,7 @@ async def deploy_container_from_repo(
         headers={"Content-Type": "application/json"},
         json=payload,
     )
+    print(container)
     _id = container["Id"]
     await d.start_container(_id)
     await cf.create_dns_record(name)
