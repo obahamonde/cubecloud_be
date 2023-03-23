@@ -10,6 +10,7 @@ from src.config import env, fetch
 from src.utils import build_file_tree, gen_port
 from src.api import cloudflare as cf
 from src.api import docker as d
+from src.constants import NGINX_CONFIG, DOCKERFILE, PYTHON_FILE
 
 HEADERS = {
     "Accept": "application/vnd.github.v3+json",
@@ -17,45 +18,7 @@ HEADERS = {
 }
 
 
-NGINX_CONFIG = """server {
-    listen 80;
-    server_name {{ id }}.smartpro.solutions;
 
-    location / {
-        proxy_pass http://localhost:{{ port }};
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-}"""
-
-DOCKERFILE = """
-FROM python:3.7
-ARG LOCAL_PATH
-WORKDIR /app
-COPY ${LOCAL_PATH}/requirements.txt /app
-RUN pip install --upgrade pip \    
-    pip install --no-cache-dir -r requirements.txt
-COPY ${LOCAL_PATH} /app
-CMD ["python", "main.py"]
-"""
-
-PYTHON_FILE="""from flask import Flask, jsonify, request
-import socket
-
-app = Flask(__name__)
-
-@app.route('/')
-def main(): 
-    return jsonify({
-        "message": "Hello World!",
-        "hostname": socket.gethostname(),
-        "ip": request.remote_addr
-    })
-    
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-        """
 
 app = APIRouter()
 
@@ -122,6 +85,7 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
                 data=content,
             ) as response:
                 streamed_data = await response.text()
+                print(streamed_data)
                 id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
                 return id_
 
