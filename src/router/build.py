@@ -212,7 +212,7 @@ async def deploy_container_from_repo(
     "/etc/nginx/sites-available"]:
             with open(f"{path}/{_id}.conf", "w") as f:
                 f.write(nginx_config)
-        os.system("nginx service reload")
+        os.system("nginx -s reload")
         data = await d.get_container(_id)
         return {
             "url": f"{name}.smartpro.solutions",
