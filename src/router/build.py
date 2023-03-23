@@ -48,7 +48,6 @@ async def get_latest_commit_sha(owner: str, repo: str) -> str:
     
     return payload[0]["sha"]
 
-@app.get("/clone")
 async def git_clone(owner: str, repo: str):
     async with ClientSession() as session:
         sha = await get_latest_commit_sha(owner, repo)
@@ -62,7 +61,43 @@ async def git_clone(owner: str, repo: str):
             tarball.extractall(path=f"/containers/{sha}")
             return build_file_tree(f"/containers/{sha}")["children"][0]["children"]
 
+async def get_local_tree(sub:str, name:str):
+    os.makedirs(f"/containers/{sub}", exist_ok=True)
+    os.makedirs(f"/containers/{sub}/{name}", exist_ok=True)
+    with open(f"/containers/{sub}/{name}/main.py", "w") as f:
+        f.write("""from flask import Flask, jsonify, request
+import socket
 
+app = Flask(__name__)
+
+@app.route('/')
+def main(): 
+    return jsonify({
+        "message": "Hello World!",
+        "hostname": socket.gethostname(),
+        "ip": request.remote_addr
+    })
+    
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+        """)
+        
+    with open(f"/containers/{sub}/{name}/Dockerfile", "w") as f:
+        f.write("""
+FROM python:3.7
+ARG LOCAL_PATH
+WORKDIR /app
+COPY ${LOCAL_PATH}/requirements.txt /app
+RUN pip install --upgrade pip \    
+    pip install --no-cache-dir -r requirements.txt
+COPY ${LOCAL_PATH} /app
+CMD ["python", "main.py"]
+""")
+    with open(f"/containers/{sub}/{name}/requirements.txt", "w") as f:
+        f.write("flask")
+
+    return build_file_tree(f"/containers/{sub}/{name}")
+    
 async def docker_build_from_github_tarball(owner: str, repo: str):
     """
     Builds a Docker image from the latest code for the given GitHub repository.
@@ -87,23 +122,39 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
                 id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
                 return id_
 
-async def build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
+async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
     """
     Builds a Docker image from the given file tree.
     :param tree: The file tree.
     :return: The output of the Docker build.
     """
-    if isinstance(tree, list):
-        for item in tree:
-            await build_from_tree(item)
-    else:
-        if tree["type"] == "file":
-            with open(tree["path"], "w") as f:
-                f.write(tree["content"])
-        else:
-            os.makedirs(tree["path"], exist_ok=True)
-            await build_from_tree(tree["children"])
-    
+    tarball = io.BytesIO()
+    with tarfile.open(fileobj=tarball, mode="w:gz") as tar:
+        if isinstance(tree, dict):
+            tree = [tree]
+        for file in tree:
+            if file["type"] == "file":
+                tarinfo = tarfile.TarInfo(name=file["name"])
+                tarinfo.size = len(file["content"])
+                tarinfo.mtime = 0
+                tar.addfile(tarinfo, io.BytesIO(file["content"].encode("utf-8")))
+            elif file["type"] == "directory":
+                tar.addfile(tarfile.TarInfo(name=file["name"] + "/"))
+                await docker_build_from_tree(file["children"])
+    tarball.seek(0)
+    async with ClientSession() as session:
+        async with session.post(
+            f"{env.DOCKER_URL}/build?dockerfile=Dockerfile",
+            data=tarball.read(),
+        ) as response:
+            streamed_data = await response.text()
+            id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
+            return id_
+
+
+@app.get("/tree/{sub}/{name}")
+async def get_tree(sub:str, name:str):
+    return await get_local_tree(sub, name)
 
 @app.post("/build/{owner}/{repo}")
 async def build(owner: str, repo: str):
