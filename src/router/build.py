@@ -71,17 +71,23 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
     :param repo: The name of the repository.
     :return: The output of the Docker build.
     """
-    tarball_url = f"https://api.github.com/repos/{owner}/{repo}/tarball"
-    sha = await get_latest_commit_sha(owner, repo)
-    local_path = f"{owner}-{repo}-{sha[:7]}"
-    build_args = json.dumps({"LOCAL_PATH": local_path})
     async with ClientSession() as session:
-        async with session.post(
-            f"{env.DOCKER_URL}/build?remote={tarball_url}&dockerfile={local_path}/Dockerfile&buildargs={build_args}",
-            headers=HEADERS,
+        sha = await get_latest_commit_sha(owner, repo)
+        async with session.get(
+            f"https://api.github.com/repos/{owner}/{repo}/tarball", headers=HEADERS
         ) as response:
-            streamed_data = await response.text()
-            return streamed_data
+            response.raise_for_status()
+            local_path = f"{owner}-{repo}-{sha[:7]}"
+            build_args = json.dumps({"LOCAL_PATH": local_path})
+            content = await response.read()
+            async with session.post(
+                f"{env.DOCKER_URL}/build?dockerfile={local_path}/Dockerfile&buildargs={build_args}",
+                data=content,
+            ) as response:
+                streamed_data = await response.text()
+                id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
+                return id_
+
 
 async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
     """
@@ -139,7 +145,7 @@ async def build(owner: str, repo: str):
 async def git_clone_endpoint(owner: str, repo: str):
     return await git_clone(owner, repo)
 
-@app.post("/deploy")
+@app.post("/deploy/{owner}/{repo}")
 async def deploy_container_from_repo(
     owner:str, repo:str, port: int = 8080, env_vars: str = "DOCKER=1"
 ):
@@ -150,7 +156,7 @@ async def deploy_container_from_repo(
     host_port = str(gen_port())
     payload = {
         "Image": image,
-        "Env": env_vars.split(","),
+        "Env": env_vars.split(" "),
         "ExposedPorts": {f"{str(port)}/tcp": {"HostPort": host_port}},
         "HostConfig": {"PortBindings": {f"{str(port)}/tcp": [{"HostPort": host_port}]}},
     }
