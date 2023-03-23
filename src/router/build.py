@@ -22,7 +22,7 @@ NGINX_CONFIG = """server {
     server_name {{ id }}.smartpro.solutions;
 
     location / {
-        proxy_pass http://{{ id }}:{{ port }};
+        proxy_pass http://localhost:{{ port }};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -210,7 +210,7 @@ async def deploy_container_from_repo(
         if res["success"] == False:
             await cf.delete_dns_record(name)
             res = await cf.create_dns_record(name)
-        nginx_config = Template(NGINX_CONFIG).render(id="localhost", port=host_port)
+        nginx_config = Template(NGINX_CONFIG).render(id=name, port=host_port)
         for path in ["/etc/nginx/conf.d","/etc/nginx/sites-enabled",
     "/etc/nginx/sites-available"]:
             try:
@@ -228,5 +228,4 @@ async def deploy_container_from_repo(
             "dns": res,
         }
     except KeyError:
-        _id = container.get("message")[7:19]
-        return {"error": "container already exists", "id": _id}
+        return container
