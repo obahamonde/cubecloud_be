@@ -6,7 +6,9 @@ from src.api.docker import (
     get_container_logs,
     get_container_stats,
     get_containers,
-    ContainerConfig
+    ContainerConfig,
+    fetch,
+    env
 )
 
 app = APIRouter()
@@ -34,3 +36,15 @@ async def create_new_container(name: str, container: ContainerConfig):
 @app.delete("/containers/{container}", tags=["containers"])
 async def delete_container_by_id(container: str):
     return await delete_container(container)
+
+@app.put("/containers/{container}/start", tags=["containers"])
+async def start_container_by_id(container: str):
+    return await fetch(f"{env.DOCKER_URL}/containers/{container}/start", "POST")
+
+@app.put("/containers/{container}/stop", tags=["containers"])
+async def stop_container_by_id(container: str):
+    return await fetch(f"{env.DOCKER_URL}/containers/{container}/stop", "POST")
+
+@app.put("/containers/{container}/restart", tags=["containers"])
+async def restart_container_by_id(container: str):
+    return await fetch(f"{env.DOCKER_URL}/containers/{container}/restart", "POST")
