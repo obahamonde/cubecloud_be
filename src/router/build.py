@@ -146,8 +146,7 @@ async def deploy_container_from_repo(
 ):
     name = f"{container.owner}-{container.repo}".lower()
     image = await docker_build_from_github_tarball(container.owner, container.repo)
-    if "error" in image:
-        return image
+    print(image)
     host_port = str(gen_port())
     payload = {
         "Image": image,
