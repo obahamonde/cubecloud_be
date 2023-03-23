@@ -4,6 +4,7 @@ from aiohttp import ClientSession
 from src.config import env, fetch
 from pydantic import BaseModel, Field
 
+
 class ContainerConfig(BaseModel):
     image: str = Field(..., example="ubuntu")
     shell: str = Field(..., example="/bin/bash")
@@ -89,20 +90,7 @@ async def create_container(name: str, container: ContainerConfig) -> Dict[str, A
                 return image_status
 
 async def delete_container(container: str):
-    async with ClientSession() as session:
-        async with session.delete(
-            f"{env.DOCKER_URL}/containers/{container}"
-        ) as response:
-            if response.status == 204:
-                return {
-                    "message": "Container deleted",
-                    "status": "success",
-                }
-            else:
-                return {
-                    "message": "Something went wrong",
-                    "status": "error",
-                }
+    return await fetch(f"{env.DOCKER_URL}/containers/{container}", "DELETE")
 
 async def get_container_stats(container: str) -> Dict[str, Any]:
     """
