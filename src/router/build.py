@@ -81,8 +81,7 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
             headers=HEADERS,
         ) as response:
             streamed_data = await response.text()
-            id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
-            return id_
+            return streamed_data
 
 async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
     """
