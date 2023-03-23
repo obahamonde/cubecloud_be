@@ -150,7 +150,7 @@ async def deploy_container_from_repo(
     host_port = str(gen_port())
     payload = {
         "Image": image,
-        "Env": env_vars.split(" "),
+        "Env": env_vars.split(","),
         "ExposedPorts": {f"{str(port)}/tcp": {"HostPort": host_port}},
         "HostConfig": {"PortBindings": {f"{str(port)}/tcp": [{"HostPort": host_port}]}},
     }
