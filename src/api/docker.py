@@ -93,7 +93,7 @@ async def delete_container(container: str):
         async with session.delete(
             f"{env.DOCKER_URL}/containers/{container}"
         ) as response:
-            if response.status == status.HTTP_204_NO_CONTENT:
+            if response.status == 204:
                 return {
                     "message": "Container deleted",
                     "status": "success",
