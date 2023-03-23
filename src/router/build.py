@@ -140,18 +140,4 @@ async def deploy_container_from_repo(
         json=payload,
     )
     print(container)
-    _id = container["Id"]
-    await d.start_container(_id)
-    await cf.create_dns_record(name)
-    nginx_config = Template(NGINX_CONFIG).render(id=name, port=port)
-    for path in ["/etc/nginx/conf.d","/etc/nginx/sites-enabled",
-"/etc/nginx/sites-available"]:
-        with open(f"{path}/{_id}.conf", "w") as f:
-            f.write(nginx_config)
-    os.system("nginx service reload")
-    data = await d.get_container(_id)
-    return {
-        "url": f"{name}.smartpro.solutions",
-        "port": host_port,
-        "container": data
-    }
+    return container
