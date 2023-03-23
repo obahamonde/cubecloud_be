@@ -1,0 +1,99 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+conf
+frontend
+node_modules
+dist
+dist-ssr
+*.local
+containers/*
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+frontend
+conf
+.venv
+containers
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python egg, wheel, and build artifacts
+*.egg-info
+*.egg
+dist
+build
+eggs
+parts
+bin
+var
+sdist
+develop-eggs
+.installed.cfg
+*.egg-link
+*.installed.cfg
+
+# Python bytecode
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pyz?
+*.so
+*.pyc?
+*.pyo?
+*.pyd?
+*.pyw?
+*.pyz?
+*.pyz??
+
+# Python virtual environments
+.env
+.venv
+env
+venv
+ENV
+env.bak
+venv.bak
+pip-selfcheck.json
+
+# VSCode
+
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/jest.code-snippets
+
+# GCP credentials
+credentials.json
+
+# Local History for Visual Studio Code
+.history
+
+# PyTest
+.pytest_cache/
+
