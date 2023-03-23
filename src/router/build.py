@@ -76,7 +76,6 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
         async with session.get(
             f"https://api.github.com/repos/{owner}/{repo}/tarball", headers=HEADERS
         ) as response:
-            response.raise_for_status()
             local_path = f"{owner}-{repo}-{sha[:7]}"
             build_args = json.dumps({"LOCAL_PATH": local_path})
             content = await response.read()
