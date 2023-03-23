@@ -104,7 +104,7 @@ async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any
                 tar.addfile(tarfile.TarInfo(name=file["name"] + "/"))
                 await docker_build_from_tree(file["children"])
     tarball.seek(0)
-    with ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(
             f"{env.DOCKER_URL}/build?dockerfile=Dockerfile", data=tarball.read()
         ) as response:
@@ -151,7 +151,7 @@ async def deploy_container_from_repo(
     host_port = str(gen_port())
     payload = {
         "Image": image,
-        "Env": env_vars.split(" "),
+        "Env": env_vars.split(","),
         "ExposedPorts": {f"{str(port)}/tcp": {"HostPort": host_port}},
         "HostConfig": {"PortBindings": {f"{str(port)}/tcp": [{"HostPort": host_port}]}},
     }
