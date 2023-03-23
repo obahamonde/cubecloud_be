@@ -207,7 +207,10 @@ async def deploy_container_from_repo(
         _id = container["Id"]
         await d.start_container(_id)
         res = await cf.create_dns_record(name)
-        nginx_config = Template(NGINX_CONFIG).render(id=name, port=port)
+        if res["success"] == False:
+            await cf.delete_dns_record(name)
+            res = await cf.create_dns_record(name)
+        nginx_config = Template(NGINX_CONFIG).render(id="localhost", port=host_port)
         for path in ["/etc/nginx/conf.d","/etc/nginx/sites-enabled",
     "/etc/nginx/sites-available"]:
             try:
@@ -225,4 +228,6 @@ async def deploy_container_from_repo(
             "dns": res,
         }
     except KeyError:
-        return container
+        _id = container.get("message")[7:19]
+        await d.delete_container(_id)
+        return await deploy_container_from_repo(owner, repo, port, env_vars)
