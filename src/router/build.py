@@ -229,5 +229,4 @@ async def deploy_container_from_repo(
         }
     except KeyError:
         _id = container.get("message")[7:19]
-        await d.delete_container(_id)
-        return await deploy_container_from_repo(owner, repo, port, env_vars)
+        return {"error": "container already exists", "id": _id}
