@@ -29,6 +29,34 @@ NGINX_CONFIG = """server {
 }
 }"""
 
+DOCKERFILE = """
+FROM python:3.7
+ARG LOCAL_PATH
+WORKDIR /app
+COPY ${LOCAL_PATH}/requirements.txt /app
+RUN pip install --upgrade pip \    
+    pip install --no-cache-dir -r requirements.txt
+COPY ${LOCAL_PATH} /app
+CMD ["python", "main.py"]
+"""
+
+PYTHON_FILE="""from flask import Flask, jsonify, request
+import socket
+
+app = Flask(__name__)
+
+@app.route('/')
+def main(): 
+    return jsonify({
+        "message": "Hello World!",
+        "hostname": socket.gethostname(),
+        "ip": request.remote_addr
+    })
+    
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
+        """
+
 app = APIRouter()
 
 async def get_latest_commit_sha(owner: str, repo: str) -> str:
@@ -65,38 +93,13 @@ async def get_local_tree(sub:str, name:str):
     os.makedirs(f"/containers/{sub}", exist_ok=True)
     os.makedirs(f"/containers/{sub}/{name}", exist_ok=True)
     with open(f"/containers/{sub}/{name}/main.py", "w") as f:
-        f.write("""from flask import Flask, jsonify, request
-import socket
-
-app = Flask(__name__)
-
-@app.route('/')
-def main(): 
-    return jsonify({
-        "message": "Hello World!",
-        "hostname": socket.gethostname(),
-        "ip": request.remote_addr
-    })
-    
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
-        """)
-        
+        f.write(PYTHON_FILE)  
     with open(f"/containers/{sub}/{name}/Dockerfile", "w") as f:
-        f.write("""
-FROM python:3.7
-ARG LOCAL_PATH
-WORKDIR /app
-COPY ${LOCAL_PATH}/requirements.txt /app
-RUN pip install --upgrade pip \    
-    pip install --no-cache-dir -r requirements.txt
-COPY ${LOCAL_PATH} /app
-CMD ["python", "main.py"]
-""")
+        f.write(DOCKERFILE)
     with open(f"/containers/{sub}/{name}/requirements.txt", "w") as f:
         f.write("flask")
 
-    return build_file_tree(f"/containers/{sub}/{name}")
+    return build_file_tree(f"/containers/{sub}/{name}")["children"]
     
 async def docker_build_from_github_tarball(owner: str, repo: str):
     """
@@ -122,6 +125,7 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
                 id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
                 return id_
 
+
 async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
     """
     Builds a Docker image from the given file tree.
@@ -142,19 +146,26 @@ async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any
                 tar.addfile(tarfile.TarInfo(name=file["name"] + "/"))
                 await docker_build_from_tree(file["children"])
     tarball.seek(0)
-    async with ClientSession() as session:
+    with ClientSession() as session:
         async with session.post(
-            f"{env.DOCKER_URL}/build?dockerfile=Dockerfile",
-            data=tarball.read(),
+            f"{env.DOCKER_URL}/build?dockerfile=Dockerfile", data=tarball.read()
         ) as response:
             streamed_data = await response.text()
             id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
             return id_
+            
 
 
 @app.get("/tree/{sub}/{name}")
 async def get_tree(sub:str, name:str):
     return await get_local_tree(sub, name)
+
+@app.post("/tree/{sub}/{name}")
+async def build_container_from_tree(
+    sub:str, name:str):
+    name = f"{sub}-{name}"
+    image = await docker_build_from_tree(await get_local_tree(sub, name))
+    return image
 
 @app.post("/build/{owner}/{repo}")
 async def build(owner: str, repo: str):
@@ -177,6 +188,8 @@ async def deploy_container_from_repo(
 ):
     name = f"{owner}-{repo}"
     image = await docker_build_from_github_tarball(owner, repo)
+    if "error" in image:
+        return image
     host_port = str(gen_port())
     payload = {
         "Image": image,
@@ -190,5 +203,21 @@ async def deploy_container_from_repo(
         headers={"Content-Type": "application/json"},
         json=payload,
     )
-    print(container)
-    return container
+    try:
+        _id = container["Id"]
+        await d.start_container(_id)
+        await cf.create_dns_record(name)
+        nginx_config = Template(NGINX_CONFIG).render(id=name, port=port)
+        for path in ["/etc/nginx/conf.d","/etc/nginx/sites-enabled",
+    "/etc/nginx/sites-available"]:
+            with open(f"{path}/{_id}.conf", "w") as f:
+                f.write(nginx_config)
+        os.system("nginx service reload")
+        data = await d.get_container(_id)
+        return {
+            "url": f"{name}.smartpro.solutions",
+            "port": host_port,
+            "container": data
+        }
+    except KeyError:
+        return container
