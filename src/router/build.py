@@ -210,7 +210,10 @@ async def deploy_container_from_repo(
         nginx_config = Template(NGINX_CONFIG).render(id=name, port=port)
         for path in ["/etc/nginx/conf.d","/etc/nginx/sites-enabled",
     "/etc/nginx/sites-available"]:
-            os.remove(f"{path}/{name}.conf")
+            try:
+                os.remove(f"{path}/{name}.conf")
+            except:
+                pass
             with open(f"{path}/{name}.conf", "w") as f:
                 f.write(nginx_config)
         os.system("nginx -s reload")
