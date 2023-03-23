@@ -139,7 +139,7 @@ async def build(owner: str, repo: str):
 async def git_clone_endpoint(owner: str, repo: str):
     return await git_clone(owner, repo)
 
-@app.post("/deploy/{owner}/{repo}")
+@app.get("/deploy")
 async def deploy_container_from_repo(
     owner:str, repo:str, port: int = 8080, env_vars: str = "DOCKER=1"
 ):
