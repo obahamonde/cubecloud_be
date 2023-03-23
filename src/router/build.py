@@ -144,7 +144,7 @@ async def git_clone_endpoint(owner: str, repo: str):
 async def deploy_container_from_repo(
    container:ContainerCreate
 ):
-    name = f"{container.owner.lower}-{container.repo}".lower()
+    name = f"{container.owner}-{container.repo}".lower()
     image = await docker_build_from_github_tarball(container.owner, container.repo)
     if "error" in image:
         return image
