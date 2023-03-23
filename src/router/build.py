@@ -10,7 +10,6 @@ from src.config import env, fetch
 from src.utils import build_file_tree, gen_port
 from src.api import cloudflare as cf
 from src.api import docker as d
-from src.model.schemas import ContainerCreate
 from src.constants import NGINX_CONFIG, DOCKERFILE, PYTHON_FILE
 
 HEADERS = {
@@ -142,26 +141,27 @@ async def git_clone_endpoint(owner: str, repo: str):
 
 @app.post("/deploy")
 async def deploy_container_from_repo(
-   container:ContainerCreate
+    owner:str, repo:str, port: int = 8080, env_vars: str = "DOCKER=1"
 ):
-    name = f"{container.owner}-{container.repo}".lower()
-    image = await docker_build_from_github_tarball(container.owner, container.repo)
-    print(image)
+    name = f"{owner}-{repo}"
+    image = await docker_build_from_github_tarball(owner, repo)
+    if "error" in image:
+        return image
     host_port = str(gen_port())
     payload = {
         "Image": image,
-        "Env": container.env_vars,
-        "ExposedPorts": {f"{str(container.port)}/tcp": {"HostPort": host_port}},
-        "HostConfig": {"PortBindings": {f"{str(container.port)}/tcp": [{"HostPort": host_port}]}},
+        "Env": env_vars.split(","),
+        "ExposedPorts": {f"{str(port)}/tcp": {"HostPort": host_port}},
+        "HostConfig": {"PortBindings": {f"{str(port)}/tcp": [{"HostPort": host_port}]}},
     }
-    new_container = await fetch(
+    container = await fetch(
         f"{env.DOCKER_URL}/containers/create?name={name}",
         "POST",
         headers={"Content-Type": "application/json"},
         json=payload,
     )
     try:
-        _id = new_container["Id"]
+        _id = container["Id"]
         await d.start_container(_id)
         res = await cf.create_dns_record(name)
         if res["success"] == False:
@@ -185,4 +185,4 @@ async def deploy_container_from_repo(
             "dns": res,
         }
     except KeyError:
-        return new_container
+        return container
