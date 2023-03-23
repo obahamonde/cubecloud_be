@@ -73,21 +73,29 @@ async def docker_build_from_github_tarball(owner: str, repo: str):
     """
     async with ClientSession() as session:
         sha = await get_latest_commit_sha(owner, repo)
-        async with session.get(
-            f"https://api.github.com/repos/{owner}/{repo}/tarball", headers=HEADERS
+        tree = await git_clone(owner, repo)
+        for file in tree:
+            if file["type"] == "file":
+                file["content"] = file["content"]
+        tarball = io.BytesIO()
+        with tarfile.open(fileobj=tarball, mode="w:gz") as tar:
+            for file in tree:
+                if file["type"] == "file":
+                    tarinfo = tarfile.TarInfo(name=file["name"])
+                    tarinfo.size = len(file["content"])
+                    tarinfo.mtime = 0
+                    tar.addfile(tarinfo, io.BytesIO(file["content"].encode("utf-8")))
+                elif file["type"] == "directory":
+                    tar.addfile(tarfile.TarInfo(name=file["name"] + "/"))
+                    await docker_build_from_tree(file["children"])
+        tarball.seek(0)
+        async with session.post(
+            f"{env.DOCKER_URL}/build?dockerfile=Dockerfile", data=tarball.read()
         ) as response:
-            local_path = f"{owner}-{repo}-{sha[:7]}"
-            build_args = json.dumps({"LOCAL_PATH": local_path})
-            content = await response.read()
-            async with session.post(
-                f"{env.DOCKER_URL}/build?dockerfile={local_path}/Dockerfile&buildargs={build_args}",
-                data=content,
-            ) as response:
-                streamed_data = await response.text()
-                print(streamed_data)
-                id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
-                return id_
-
+            streamed_data = await response.text()
+            id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
+            return id_
+        
 
 async def docker_build_from_tree(tree: Union[List[Dict[str, Any]], Dict[str, Any]]):
     """
